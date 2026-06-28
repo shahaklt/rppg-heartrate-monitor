@@ -1,0 +1,100 @@
+# rPPG Emotion Fingerprinting — central config
+# All stages read defaults from here. Paths are relative to project root.
+
+paths:
+  data_root: data/ubfc_phys
+  manifest: data/manifest.json
+  verified_subjects: data/verified_subjects.json
+  hrv_dataset: data/hrv_dataset.npz
+  checkpoints: checkpoints
+  results: results
+  logs: logs
+
+# Signal band for pulse (0.7-3.0 Hz == 42-180 BPM)
+bandpass:
+  low_hz: 0.7
+  high_hz: 3.0
+  order: 3
+
+rppg:
+  roi_landmarks:
+    left_cheek:  [116, 123, 147, 187, 207, 213, 192, 214, 210, 169]
+    right_cheek: [345, 352, 376, 411, 427, 433, 422, 430, 434, 399]
+    forehead:    [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361,
+                  288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149,
+                  150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103,
+                  67, 109]
+  efficientphys:
+    input_size: 72
+    window: 128
+    stride: 64
+    fp16: true
+    checkpoint: checkpoints/efficientphys.pth
+
+signal_quality:
+  # Harmonic pulse SNR (fundamental + 2nd harmonic vs rest of 0.7-3 Hz band).
+  # Calibrated on real PPG: pure noise / motion scores ~ -7.8 dB, a window with a
+  # real pulse comb scores > -2 dB. So -2 dB is the "is there a pulse at all" gate
+  # used by the LIVE demo to avoid fabricating emotion on garbage. (WESAD training
+  # does not gate on SNR — contact reference BVP, maximise data.)
+  snr_min_db: -2.0
+  stationarity_max_hz: 0.5   # allow real 60 s HR transitions (~30 bpm) under emotion
+  nan_max_fraction: 0.10
+
+hrv:
+  # 60 s ultra-short HRV window: same distribution for training AND the live demo
+  # (resolves LF >=0.04 Hz; demo warmup is 60 s not 2 min)
+  window_seconds: 60
+  step_seconds: 15
+  rr_min_ms: 300
+  rr_max_ms: 2000
+  rr_jump_frac: 0.20
+  lf_band: [0.04, 0.15]
+  hf_band: [0.15, 0.40]
+  feature_order: [SDNN, RMSSD, pNN50, CVRR, Mean_HR,
+                  LF, HF, LF_HF, Total_power, LF_norm, HF_norm]
+
+dataset:
+  bvp_fs: 64        # Empatica E4 BVP sampling rate (Hz) — same in WESAD wrist + UBFC-Phys
+  video_fps: 30     # UBFC-rPPG webcam fps
+  min_segment_seconds: 90
+  task_names: {0: baseline, 1: stress, 2: amusement}   # WESAD 3-class
+
+# WESAD: emotion training source (wrist Empatica E4 BVP @64Hz)
+wesad:
+  raw_zip: data/raw/WESAD.zip
+  root: data/wesad           # extracted WESAD/S2/S2.pkl ...
+  bvp_fs: 64
+  label_fs: 700              # chest/label stream sampling rate
+  # WESAD label codes -> our 3 classes (drop meditation=4 and transient 0/5/6/7)
+  label_map: {1: 0, 2: 1, 3: 2}   # baseline->0, stress->1, amusement->2
+
+# UBFC-rPPG: rPPG validation source (webcam video + pulse-oximeter ground truth)
+ubfc_rppg:
+  root: data/raw/ubfc_rppg
+  video_fps: 30
+  gt_fs: 30                  # ground_truth.txt PPG sampled per frame
+
+classifier:
+  xgboost:
+    n_estimators: 200
+    max_depth: 4
+    learning_rate: 0.05
+    subsample: 0.8
+    colsample_bytree: 0.8
+    eval_metric: mlogloss
+  mlp:
+    lr: 0.001
+    epochs: 100
+    patience: 10
+    dropout: 0.3
+
+demo:
+  camera_idx: 0
+  width: 1280
+  height: 720
+  target_fps: 30
+  window_seconds: 60      # matches hrv.window_seconds (training/inference parity)
+  update_seconds: 2
+  # demo-facing arousal labels mapped from the trained task classes
+  emotion_names: {0: calm, 1: stressed, 2: cognitive-load}

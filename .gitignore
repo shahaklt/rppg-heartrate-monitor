@@ -1,0 +1,25 @@
+# virtualenv
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# data — large, regenerate via download scripts
+data/raw/
+data/wesad/
+data/ubfc_phys/
+data/*.npz
+data/manifest.json
+data/verified_subjects.json
+
+# model + run artifacts
+checkpoints/*.json
+checkpoints/*.pkl
+checkpoints/*.pth
+checkpoints/*.task
+logs/*.log
+logs/*.txt
+
+# keep results figures/json out of git by default
+results/*.png
+results/*.json
